@@ -4,6 +4,25 @@ import albumentations as A
 import cv2
 import tensorflow as tf
 
+import matplotlib.pyplot as plt
+
+import keras
+
+from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.regularizers import l2
+from tensorflow.keras import backend as K
+
+from tensorflow.keras import layers, Model
+from tensorflow.keras.applications import ConvNeXtBase
+
+
+# Setting the seeds for reproducibility
+seed = 42
+np.random.seed(42)
+tf.random.set_seed(42)
+
 """
 All the functions are built in such a way to be compatible with the tensorflow Dataset API.
 This is the reason why all functions are annotated with @tf.py_function(...)
@@ -12,8 +31,7 @@ numpy arrays (in and out of the functions).
 """
 
 
-@tf.py_function(Tout=[tf.uint8, tf.uint8])
-def apply_geometric_transform(images, masks):
+def apply_geometric_transform(image, mask):
     """
     Simple helper function that takes in an array of images and the corresponding masks
     and applies a series of geometric transformations on both. It returns the two arrays of transformed
@@ -32,26 +50,39 @@ def apply_geometric_transform(images, masks):
         ]
     )
     
-    images=images.numpy()
-    masks = masks.numpy()
-    n_images = len(images)
-    result_images = []
-    result_masks = []
+    # The application of the transformation returns a dictionary with two keys
+    # "image" : modified image
+    # "mask" : modified mask
+    result_dict = transformation(image=image.numpy(), mask=mask.numpy())
+    result_image = result_dict["image"]
+    result_mask = result_dict["mask"]
     
-    for index in range(0, n_images):
-        # The application of the transformation returns a dictionary with two keys
-        # "image" : modified image
-        # "mask" : modified mask
-        result_dict = transformation(image=images[index], mask=masks[index])
-        result_images.append(result_dict["image"])
-        result_masks.append(result_dict["mask"])
+    # Turn results back into tensors
+    result_image = tf.convert_to_tensor(result_image, dtype=tf.uint8)
+    result_mask = tf.convert_to_tensor(result_mask, dtype=tf.uint8)
 
-    return np.array(result_images), np.array(result_masks)
-        
+    result_image = tf.ensure_shape(result_image, (64, 128))
+    result_mask = tf.ensure_shape(result_mask, (64, 128))
 
 
-@tf.py_function(Tout=[tf.uint8, tf.uint8])
-def apply_intensity_transform(images, masks):
+    return result_image, result_mask
+
+
+
+def map_geometric_transform(image, mask):
+    result_image, result_mask = tf.py_function(
+        func=apply_geometric_transform,
+        inp=[image, mask],
+        Tout=[tf.uint8, tf.uint8]
+    )
+    # Ensure static shapes after tf.py_function
+    result_image.set_shape((64, 128))
+    result_mask.set_shape((64, 128))
+    return result_image, result_mask
+
+
+
+def apply_intensity_transform(image, mask):
     """
     Simple helper function that takes in an array of images and the corresponding masks
     and applies a series of "intensity" transformations, which modify pixel values to achieve
@@ -72,27 +103,38 @@ def apply_intensity_transform(images, masks):
         ]
     )
 
-    images=images.numpy()
-    masks = masks.numpy()
-    n_images = len(images)
-    result_images = []
-    result_masks = []
+    # The application of the transformation returns a dictionary with two keys
+    # "image" : modified image
+    # "mask" : modified mask
+    result_dict = transformation(image=image.numpy(), mask=mask.numpy())
+    result_image = result_dict["image"]
+    result_mask = result_dict["mask"]
+
+    # Turn results back into tensors
+    result_image = tf.convert_to_tensor(result_image, dtype=tf.uint8)
+    result_mask = tf.convert_to_tensor(result_mask, dtype=tf.uint8)
+
+    result_image = tf.ensure_shape(result_image, (64, 128))
+    result_mask = tf.ensure_shape(result_mask, (64, 128))
     
-    for index in range(0, n_images):
-        # The application of the transformation returns a dictionary with two keys
-        # "image" : modified image
-        # "mask" : modified mask
-        result_dict = transformation(image=images[index], mask=masks[index])
-        result_images.append(result_dict["image"])
-        result_masks.append(result_dict["mask"])
+    return result_image, result_mask
 
-    return result_images, result_masks
 
+def map_intensity_transform(image, mask):
+    result_image, result_mask = tf.py_function(
+        func=apply_intensity_transform,
+        inp=[image, mask],
+        Tout=[tf.uint8, tf.uint8]
+    )
+    # Ensure static shapes after tf.py_function
+    result_image.set_shape((64, 128))
+    result_mask.set_shape((64, 128))
+    return result_image, result_mask
 
     
 
-@tf.py_function(Tout=[tf.uint8, tf.uint8])
-def apply_total_transform(images, masks):
+
+def apply_total_transform(image, mask):
     """
     Simple helper function that takes in an array of images and the corresponding masks
     and applies a combination of geometric and pixel intensity transformations. 
@@ -129,29 +171,84 @@ def apply_total_transform(images, masks):
             ), 
         ]
     )
-
-    images=images.numpy()
-    masks = masks.numpy()
-    n_images = len(images)
-    result_images = []
-    result_masks = []
     
-    for index in range(0, n_images):
-        # The application of the transformation returns a dictionary with two keys
-        # "image" : modified image
-        # "mask" : modified mask
-        result_dict = transformation(image=images[index], mask=masks[index])
-        result_images.append(result_dict["image"])
-        result_masks.append(result_dict["mask"])
+    # The application of the transformation returns a dictionary with two keys
+    # "image" : modified image
+    # "mask" : modified mask
+    result_dict = transformation(image=image.numpy(), mask=mask.numpy())
+    result_image = result_dict["image"]
+    result_mask = result_dict["mask"]
 
-    return result_images, result_masks
+    # Turn results back into tensors
+    result_image = tf.convert_to_tensor(result_image, dtype=tf.uint8)
+    result_mask = tf.convert_to_tensor(result_mask, dtype=tf.uint8)
+
+    result_image = tf.ensure_shape(result_image, (64, 128))
+    result_mask = tf.ensure_shape(result_mask, (64, 128))
+    
+    return result_image, result_mask
+
+
+
+def map_total_transform(image, mask):
+    result_image, result_mask = tf.py_function(
+        func=apply_total_transform,
+        inp=[image, mask],
+        Tout=[tf.uint8, tf.uint8]
+    )
+    # Ensure static shapes after tf.py_function
+    result_image.set_shape((64, 128))
+    result_mask.set_shape((64, 128))
+    return result_image, result_mask
 
 
 
 
+def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
+
+    """
+    Helper function to plot images and masks pairs.
+
+    Notice: when plotting grayscale or masks, it is necessary to specify vmin and vmax to the plotting function
+    so that no rescaling is performed on the input data by the library
+    
+    """
+    
+    # Define a colormap to simplify the visualisation of the classes on the masks
+    # Background (0) -> black
+    # Soil (1) -> red
+    # Bedrock (2) -> blue
+    # Sand (3) -> green
+    # Big Rock (4) -> yellow
+    mask_colormap = mpl.colors.ListedColormap(["black", "red", "blue", "green", "yellow"])
+
+    figure = plt.figure(figsize=figsize)
+
+    if images.ndim == 2:    # Single image
+        axes_array = figure.subplots(1, 2)
+        axes_array = axes_array.flatten()
+        axes_array[0].imshow(images, cmap=cmap, vmin=0, vmax=255)
+        axes_array[0].axis('off')
+        # Plot original mask
+        axes_array[1].imshow(masks, cmap=mask_colormap, vmin=0, vmax=4) 
+        axes_array[1].axis('off')
+    else: 
+        image_count = len(images)
+        axes_array = figure.subplots(image_count, 2)
+        axes_array = axes_array.flatten()
+        for img_index, axes_index in zip(range(0, image_count), range(0, image_count * 2, 2)):
+            axes_array[axes_index].imshow(images[img_index], cmap=cmap, vmin=0, vmax=255)
+            axes_array[axes_index].axis('off')
+            # Plot original mask
+            axes_array[axes_index + 1].imshow(masks[img_index], cmap=mask_colormap, vmin=0, vmax=4) 
+            axes_array[axes_index + 1].axis('off')
+
+    plt.show()
 
 
-def plot_images_and_masks(aug_imgs, aug_msks, original_imgs, original_msks, grid=(10, 4), figsize=(20, 30), cmap='gray'):
+
+
+def plot_images_and_masks_augmented(aug_imgs, aug_msks, original_imgs, original_msks, grid=(10, 4), figsize=(20, 30), cmap='gray'):
 
     """
     Helper function to verify the correct functioning of augmentation or image transformations.
@@ -175,7 +272,7 @@ def plot_images_and_masks(aug_imgs, aug_msks, original_imgs, original_msks, grid
 
     image_count = len(original_imgs)
     
-    figure = mpl.pyplot.figure(figsize=figsize)
+    figure = plt.figure(figsize=figsize)
     axes_array = figure.subplots(grid[0], grid[1])
     axes_array = axes_array.flatten()
     
@@ -194,3 +291,5 @@ def plot_images_and_masks(aug_imgs, aug_msks, original_imgs, original_msks, grid
         axes_array[ax_index + 3].imshow(aug_msks[img_index], cmap=mask_colormap, vmin=0, vmax=4) 
         axes_array[ax_index + 3].axis('off')
 
+    plt.show()
+        
