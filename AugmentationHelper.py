@@ -3,20 +3,7 @@ import matplotlib as mpl
 import albumentations as A
 import cv2
 import tensorflow as tf
-
 import matplotlib.pyplot as plt
-
-import keras
-
-from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from keras.regularizers import l2
-from tensorflow.keras import backend as K
-
-from tensorflow.keras import layers, Model
-from tensorflow.keras.applications import ConvNeXtBase
-
 
 # Setting the seeds for reproducibility
 seed = 42
@@ -33,9 +20,8 @@ numpy arrays (in and out of the functions).
 
 def apply_geometric_transform(image, mask):
     """
-    Simple helper function that takes in an array of images and the corresponding masks
-    and applies a series of geometric transformations on both. It returns the two arrays of transformed
-    images and masks as nparrays.
+    Simple helper function that takes in a single image and the corresponding mask as tensors 
+    and applies a series of geometric transformations on both. It returns the image and the mask as tensors (after transformations).
     """
 
     transformation = A.Compose(
@@ -45,8 +31,6 @@ def apply_geometric_transform(image, mask):
             A.HorizontalFlip(p=0.7),
             A.VerticalFlip(p=0.7),
             A.ElasticTransform(alpha=10, sigma=10, interpolation=cv2.INTER_NEAREST, p=0.6),   # alpha for distortion level, sigma for smoothness
-            A.Perspective(),
-            A.GridDistortion()
         ]
     )
     
@@ -68,7 +52,6 @@ def apply_geometric_transform(image, mask):
     return result_image, result_mask
 
 
-
 def map_geometric_transform(image, mask):
     result_image, result_mask = tf.py_function(
         func=apply_geometric_transform,
@@ -82,14 +65,14 @@ def map_geometric_transform(image, mask):
 
 
 
+
+
 def apply_intensity_transform(image, mask):
     """
-    Simple helper function that takes in an array of images and the corresponding masks
-    and applies a series of "intensity" transformations, which modify pixel values to achieve
-    common "colour distortions". It returns the two arrays of transformed
-    images and masks as nparrays.
+    Simple helper function that takes in a single image and the corresponding mask as tensors 
+    and applies a series of colour/intensity transformations on both. It returns the image and the mask as tensors (after transformations).
 
-    Notice: for these types of transformations, the library expects the input images in two possible formats:
+    Notice: for these types of transformations, the Albumentations library expects the input images in two possible formats:
     - floating point values in the range [0.0, 1.0]
     - integers in the range [0, 255]
     It is therefore necessary to cast the images to hold integer pixel values before passing them in.
@@ -99,7 +82,7 @@ def apply_intensity_transform(image, mask):
             A.RandomBrightnessContrast(p=0.9),
             A.CLAHE(p=0.7),
             A.Sharpen(p=0.5),
-            A.MotionBlur(p=0.6),
+            A.MotionBlur(p=0.1),
         ]
     )
 
@@ -134,11 +117,13 @@ def map_intensity_transform(image, mask):
     
 
 
+
+
 def apply_total_transform(image, mask):
     """
-    Simple helper function that takes in an array of images and the corresponding masks
+    Simple helper function that takes in a single image and the corresponding mask as tensors 
     and applies a combination of geometric and pixel intensity transformations. 
-    It returns the two arrays of transformed images and masks as nparrays.
+    It returns the image and the mask as tensors (after transformations).
 
     Notice: since many different types of augmentation steps are listed, the parameters 
     are tuned to mitigate and control the effects of each component of the pipeline (eccessive 
@@ -151,9 +136,9 @@ def apply_total_transform(image, mask):
                     A.RandomBrightnessContrast(p=0.5),
                     A.CLAHE(p=0.5, clip_limit=1.1),
                     A.Sharpen(p=0.3, alpha=(0.1,0.25), lightness=(0.9,1)),
-                    A.MotionBlur(p=0.4, blur_limit=5)
+                    A.MotionBlur(p=0.1, blur_limit=5)
                 ],
-                n=2,
+                n=1,
                 replace=False
             ),
             A.SomeOf(
@@ -163,10 +148,8 @@ def apply_total_transform(image, mask):
                     A.HorizontalFlip(p=1),
                     A.VerticalFlip(p=1),
                     A.ElasticTransform(alpha=5, sigma=5, interpolation=cv2.INTER_NEAREST, p=0.3),   # alpha for distortion level, sigma for smoothness
-                    A.Perspective(p=0.3),
-                    A.GridDistortion(p=0.3)
                 ],
-                n=3,
+                n=2,
                 replace=False 
             ), 
         ]
@@ -189,7 +172,6 @@ def apply_total_transform(image, mask):
     return result_image, result_mask
 
 
-
 def map_total_transform(image, mask):
     result_image, result_mask = tf.py_function(
         func=apply_total_transform,
@@ -200,6 +182,23 @@ def map_total_transform(image, mask):
     result_image.set_shape((64, 128))
     result_mask.set_shape((64, 128))
     return result_image, result_mask
+
+
+
+
+def dataset_to_list(dataset):
+    """
+    Helper function that takes as input a tf.Dataset of images and masks and returns two lists only containing
+    the numpy arrays of images and masks (unpacks both the Dataset layer and the Tensor layer).
+    """
+    image_list = []
+    mask_list = []
+
+    for img, mask in dataset.as_numpy_iterator():
+        image_list.append(img)
+        mask_list.append(mask)
+
+    return image_list, mask_list
 
 
 
@@ -252,10 +251,10 @@ def plot_images_and_masks_augmented(aug_imgs, aug_msks, original_imgs, original_
 
     """
     Helper function to verify the correct functioning of augmentation or image transformations.
-    The aug_imgs and aug_msks parameters are the arrays of transformed images and masks, while original_imgs and original_msks
-    are the original images from the data set.
-    By default, the function works well with 10 images, but it is possible to change the parameters to adapt it to 
-    a varying size of inputs.
+    The aug_imgs and aug_msks parameters are the array-like structures containing the transformed images and masks, while 
+    original_imgs and original_msks are the original images from the data set.
+    By default, the function works well with 10 images-masks pairs (the defaults values are set for this purpose), 
+    but it is possible to change the parameters to adapt it to a varying size of inputs.
 
     Notice: when plotting grayscale or masks, it is necessary to specify vmin and vmax to the plotting function
     so that no rescaling is performed on the input data by the library
