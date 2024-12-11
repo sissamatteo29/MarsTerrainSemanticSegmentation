@@ -203,7 +203,7 @@ def dataset_to_list(dataset):
 
 
 
-def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
+def plot_images_and_masks(images, masks, titles=None, figsize=(15, 22), cmap='gray'):
 
     """
     Helper function to plot images and masks pairs.
@@ -219,7 +219,12 @@ def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
     # Bedrock (2) -> blue
     # Sand (3) -> green
     # Big Rock (4) -> yellow
-    mask_colormap = mpl.colors.ListedColormap(["black", "red", "blue", "green", "yellow"])
+    colors = ["black", "red", "blue", "green", "yellow"]
+    bounds = [0, 1, 2, 3, 4, 5]  # Bounds correspond to the intervals between numbers.
+    norm = mpl.colors.BoundaryNorm(bounds, len(colors))
+
+    # Create the colormap
+    mask_colormap = mpl.colors.ListedColormap(colors)
 
     figure = plt.figure(figsize=figsize)
 
@@ -227,20 +232,24 @@ def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
         axes_array = figure.subplots(1, 2)
         axes_array = axes_array.flatten()
         axes_array[0].imshow(images, cmap=cmap, vmin=0, vmax=255)
+        axes_array[0].set_title(titles[0]) if titles is not None else None
         axes_array[0].axis('off')
         # Plot original mask
-        axes_array[1].imshow(masks, cmap=mask_colormap, vmin=0, vmax=4) 
+        axes_array[1].imshow(masks, cmap=mask_colormap, norm=norm, vmin=0, vmax=4) 
         axes_array[1].axis('off')
+        axes_array[1].set_title(titles[0]) if titles is not None else None
     else: 
         image_count = len(images)
         axes_array = figure.subplots(image_count, 2)
         axes_array = axes_array.flatten()
         for img_index, axes_index in zip(range(0, image_count), range(0, image_count * 2, 2)):
             axes_array[axes_index].imshow(images[img_index], cmap=cmap, vmin=0, vmax=255)
+            axes_array[axes_index].set_title(titles[img_index]) if titles is not None else None
             axes_array[axes_index].axis('off')
             # Plot original mask
             axes_array[axes_index + 1].imshow(masks[img_index], cmap=mask_colormap, vmin=0, vmax=4) 
             axes_array[axes_index + 1].axis('off')
+            axes_array[axes_index + 1].set_title(titles[img_index]) if titles is not None else None
 
     plt.show()
 
