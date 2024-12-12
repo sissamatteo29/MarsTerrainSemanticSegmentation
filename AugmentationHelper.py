@@ -187,7 +187,7 @@ def map_total_transform(image, mask):
 
 
 
-def resize_crop(image, mask):
+def resize_crop(image, mask, interpolation=cv2.INTER_LINEAR):
     """
     Resize a cropped region of class 4 from the original image to the target size.
     
@@ -201,8 +201,8 @@ def resize_crop(image, mask):
     - or False, False if no class 4 region is found.
     """
     
-    # Step 1: Find the bounding box of the class 4 region (yellow class)
-    y_indices, x_indices = np.where(mask == 4)  # Locate all pixels of class 4
+    # Step 1: Locate all pixels of class 4 (yellow class)
+    y_indices, x_indices = np.where(mask == 4)  
     
     if len(y_indices) == 0 or len(x_indices) == 0:
         # If there are no class 4 pixels, return False
@@ -215,12 +215,11 @@ def resize_crop(image, mask):
     # Crop the image and the mask to the bounding box of class 4
     class_4_region = image[y_min:y_max+1, x_min:x_max+1]
     class_4_mask = mask[y_min:y_max+1, x_min:x_max+1]
-
     
     # Step 3: Resize the cropped class 4 region to the target size (64x128)
     target_size=(128, 64)
-    region_resized = cv2.resize(class_4_region, target_size, interpolation=cv2.INTER_LINEAR)
-    mask_resized = cv2.resize(class_4_mask, target_size, interpolation=cv2.INTER_LINEAR)
+    region_resized = cv2.resize(class_4_region, target_size, interpolation=interpolation)
+    mask_resized = cv2.resize(class_4_mask, target_size, interpolation=interpolation)
     
     return region_resized, mask_resized
 
