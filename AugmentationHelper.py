@@ -186,6 +186,48 @@ def map_total_transform(image, mask):
 
 
 
+
+def resize_crop(image, mask):
+    """
+    Resize a cropped region of class 4 from the original image to the target size.
+    
+    Args:
+    - image (numpy array): The original image (height x width).
+    - class_mask (numpy array): Segmentation mask with class 4 region.
+    - target_size (tuple): Desired size after resizing (height, width).
+
+    Returns:
+    - region_resized (numpy array), mask_resized (numpy array)
+    - or False, False if no class 4 region is found.
+    """
+    
+    # Step 1: Find the bounding box of the class 4 region (yellow class)
+    y_indices, x_indices = np.where(mask == 4)  # Locate all pixels of class 4
+    
+    if len(y_indices) == 0 or len(x_indices) == 0:
+        # If there are no class 4 pixels, return False
+        return False, False
+
+    # Step 2: Get the bounding box of the class 4 region
+    y_min, y_max = np.min(y_indices), np.max(y_indices)
+    x_min, x_max = np.min(x_indices), np.max(x_indices)
+    
+    # Crop the image and the mask to the bounding box of class 4
+    class_4_region = image[y_min:y_max+1, x_min:x_max+1]
+    class_4_mask = mask[y_min:y_max+1, x_min:x_max+1]
+
+    
+    # Step 3: Resize the cropped class 4 region to the target size (64x128)
+    target_size=(128, 64)
+    region_resized = cv2.resize(class_4_region, target_size, interpolation=cv2.INTER_LINEAR)
+    mask_resized = cv2.resize(class_4_mask, target_size, interpolation=cv2.INTER_LINEAR)
+    
+    return region_resized, mask_resized
+
+
+
+
+
 def dataset_to_list(dataset):
     """
     Helper function that takes as input a tf.Dataset of images and masks and returns two lists only containing
