@@ -128,6 +128,8 @@ def remove_outliers(images, masks):
     return images_clean, masks_clean
 
 
+
+
 def split_train_data(train_images, train_masks, validation_ratio=0.1):
 
     """
@@ -174,6 +176,11 @@ def compute_class_distribution(masks, num_classes):
     Returns:
         A dictionary with class indices as keys and percentage distributions as values.
     """
+
+    if isinstance(masks, list):
+        masks = np.array(masks)
+
+
     # Flatten the masks into a 1D array
     flattened_masks = masks.flatten()  # Shape: [num_samples * height * width]
     
@@ -323,6 +330,10 @@ def resize_crop(image, mask, class_label=4, min_class_coverage=0.05, min_patch_s
     Returns:
     - resized_image (numpy array), resized_mask (numpy array): Resized image and mask with target class emphasis.
     - None, None: If no suitable region is found.
+
+    Notice: the interpolation method passed as a parameter will only be applied to the images, not to the masks
+    which contain discrete values. Nearest Neighbour interpolation is used for masks always.
+    Moreover, the target_size is injected in this order because it is the way cv2 expects it
     """
     # Step 1: Locate all pixels belonging to the target class
     y_indices, x_indices = np.where(mask == class_label)
@@ -351,14 +362,18 @@ def resize_crop(image, mask, class_label=4, min_class_coverage=0.05, min_patch_s
 
     # Step 5: Resize the extracted region to the target size
     resized_image = cv2.resize(cropped_image, target_size, interpolation=interpolation)
-    resized_mask = cv2.resize(cropped_mask, target_size, interpolation=interpolation)
+    resized_mask = cv2.resize(cropped_mask, target_size, interpolation=cv2.INTER_NEAREST)
 
     return resized_image, resized_mask
 
 
 
-def resize_crop_total(images, masks):
 
+def resize_crop_total(images, masks):
+    """
+    Function to extract from a set of images and a set of masks patches of class 4 and resize them to original input size
+    Specifically designed for class 4 balancing procedure
+    """
     result_images = []
     result_masks = []
 
@@ -382,7 +397,7 @@ def resize_crop_total(images, masks):
 
 
 
-def extract_relevant_patches(image, mask, class_label=4, patch_size=32, stride=10, min_class_coverage=0.2):
+def extract_relevant_patches_single_image(image, mask, class_label=4, patch_size=32, stride=10, min_class_coverage=0.2):
     """
     Extract relevant patches from an image and mask, focusing on regions with a significant presence of a specific class.
 
@@ -418,6 +433,79 @@ def extract_relevant_patches(image, mask, class_label=4, patch_size=32, stride=1
                 patch_masks.append(mask_patch)
     
     return patches, patch_masks
+
+
+
+
+
+def extract_relevant_patches_dataset(images, masks, patch_size=32, stride=10, min_class_coverage=0.2):
+    """
+    Extract relevant patches from a dataset of images and masks.
+
+    Args:
+    - images: List or array of images (each image is H x W x C).
+    - masks: List or array of corresponding masks (each mask is H x W).
+    - class_label: Class of interest for patch extraction (default is 4).
+    - patch_size: Size of the square patch (default is 32).
+    - stride: Stride for sliding window (default is 10).
+    - min_class_coverage: Minimum percentage of the patch area covered by the class (default is 0.2).
+
+    Returns:
+    - all_patches: List of all image patches across the dataset.
+    - all_patch_masks: List of all mask patches across the dataset.
+    """
+    all_patches = []
+    all_patch_masks = []
+
+    for image, mask in zip(images, masks):
+        # Extract relevant patches for each image-mask pair
+        patches, patch_masks = extract_relevant_patches_single_image(
+            image=image,
+            mask=mask,
+            patch_size=patch_size,
+            stride=stride,
+            min_class_coverage=min_class_coverage,
+        )
+        
+        # Append the patches and masks to the full list
+        all_patches.extend(patches)
+        all_patch_masks.extend(patch_masks)
+
+
+    img_shape = 1
+    if len(all_patches) > 0:
+        img_shape = all_patches[0].shape
+    else:
+        img_shape = 0
+
+    print()
+    print("FUNCTION EXTRACT RELEVANT PATCHES DATASET")
+    print(f"Found {len(all_patches)} patches with size {img_shape}")
+
+    return all_patches, all_patch_masks
+
+
+
+
+
+def relevant_patches_resized_total(patches_images, patches_masks, 
+                                    target_size=(128, 64), interpolation=cv2.INTER_LINEAR):
+    """
+    This function takes a set of patches (images - masks pairs) and resizes them to the target size
+
+    Notice: the interpolation method passed as a parameter will only be applied to the images, not to the masks
+    which contain discrete values. Nearest Neighbour interpolation is used for masks always
+    """
+
+    resized_patches = []
+    resized_patches_masks = []
+    for patch, patch_mask in zip(patches_images, patches_masks):
+        resized_image = cv2.resize(patch, target_size, interpolation=interpolation)
+        resized_mask = cv2.resize(patch_mask, target_size, interpolation=cv2.INTER_NEAREST)    # Pay attention that for discrete labels NN has to be used
+        resized_patches.append(resized_image)
+        resized_patches_masks.append(resized_mask)
+
+    return resized_patches, resized_patches_masks
 
 
 
@@ -465,20 +553,152 @@ def tile_patch_to_target_size(image_patch, mask_patch, target_size=(64, 128)):
 
 
 
+def produce_tile_patch_images_total(patches_images, patches_masks, target_size=(64,128)):
+    """
+    Helper function that takes a set of image and mask pairs and for each patch it produces a 
+    tiled version that is compliant to the original image size (64, 128)
+    """
 
-## Helper function
-def pca_distribution(input_images):
-    # reshape x to apply PCA
-    x_flat = input_images.reshape(input_images.shape[0], -1)
+    tiled_images = []
+    tiled_masks = []
+    for patch, patch_mask in zip(patches_images, patches_masks):
+        # Tile the patches
+        tiled_image, tiled_mask = tile_patch_to_target_size(patch, patch_mask, target_size=target_size)
+        tiled_images.append(tiled_image)
+        tiled_masks.append(tiled_mask)
 
-    # Reduce dimensions to 2 to plot data
-    pca = PCA(n_components=2)
-    features_pca = pca.fit_transform(x_flat)
+    return tiled_images, tiled_masks
 
-    # Plot Principal components
-    # plt.title('PCA of Image Data')
-    # plt.axis('equal')
-    # sns.scatterplot(x=features_pca[:, 0], y=features_pca[:, 1])
-    # plt.show()
 
-    return features_pca
+
+
+
+def produce_tile_patch_images_mixed(patches_images, patches_masks, target_size=(64, 128), patch_size=32, target_num_images=100):
+    """
+    Generate tiled images by mixing patches from different input images.
+
+    Args:
+    - images: List or array of input images.
+    - masks: List or array of corresponding masks.
+    - target_size: Desired output image size (height, width).
+    - patch_size: Size of the square patch for extraction.
+    - stride: Stride for sliding window in patch extraction.
+    - min_class_coverage: Minimum percentage of the patch area covered by the target class.
+    - target_num_images: Number of tiled images to produce.
+
+    Returns:
+    - tiled_images: List of tiled images of size `target_size`.
+    - tiled_masks: List of tiled masks of size `target_size`.
+    """
+
+    tiled_images = []
+    tiled_masks = []
+
+    # Compute the number of patches needed to fill the target size
+    target_height, target_width = target_size
+    patches_per_row = -(-target_width // patch_size)  # Ceiling division
+    patches_per_col = -(-target_height // patch_size)  # Ceiling division
+    patches_needed = patches_per_row * patches_per_col
+
+    print(f"Tiling target size: {target_size}, requires {patches_needed} patches per image.")
+
+    # Randomly sample patches and tile them together
+    for _ in range(target_num_images):
+        # Randomly select patches for this image
+        selected_indices = np.random.choice(len(patches_images), patches_needed, replace=True)
+        selected_patches = [patches_images[i] for i in selected_indices]
+        selected_patch_masks = [patches_masks[i] for i in selected_indices]
+
+        # Create a blank canvas for the tiled image and mask
+        tiled_image = np.zeros((target_height, target_width), dtype=patches_images[0].dtype)
+        tiled_mask = np.zeros((target_height, target_width), dtype=patches_masks[0].dtype)
+
+        # Tile the patches
+        for row in range(patches_per_col):
+            for col in range(patches_per_row):
+                patch_idx = row * patches_per_row + col
+                patch = selected_patches[patch_idx]
+                patch_mask = selected_patch_masks[patch_idx]
+
+                # Determine the placement bounds
+                y_start = row * patch_size
+                y_end = min(y_start + patch_size, target_height)
+                x_start = col * patch_size
+                x_end = min(x_start + patch_size, target_width)
+
+                # Determine the crop bounds for the patch
+                patch_y_end = y_end - y_start
+                patch_x_end = x_end - x_start
+
+                # Place the patch on the canvas
+                tiled_image[y_start:y_end, x_start:x_end] = patch[:patch_y_end, :patch_x_end]
+                tiled_mask[y_start:y_end, x_start:x_end] = patch_mask[:patch_y_end, :patch_x_end]
+
+        # Append the tiled image and mask to the list
+        tiled_images.append(tiled_image)
+        tiled_masks.append(tiled_mask)
+
+    print(f"Finished procedure, returning {len(tiled_images)} images")
+
+    return tiled_images, tiled_masks
+
+
+    
+
+
+
+def extraction_class_4_samples(images, masks,
+                                patch_size=32, stride=10, min_class_coverage=0.2,
+                                interpolation=cv2.INTER_LINEAR, target_num_images_mixed_tiling=100):
+    """
+    Wrapping function that takes in all necessary parameters and applies all functions defined above to extract
+    as many samples as possible from class 4 (with a certain variability).
+    """
+
+    # First extract all relevant patches from the dataset for class 4
+    all_patches, all_patches_masks = extract_relevant_patches_dataset(images, masks, patch_size=patch_size, stride=stride, min_class_coverage=min_class_coverage)
+
+    # Resulting lists
+    total_images = []
+    total_masks = []
+
+    resize_crop_images, resize_crop_masks = resize_crop_total(images, masks)
+
+
+    patches_resized_images, patches_resized_masks = relevant_patches_resized_total(all_patches, all_patches_masks, 
+                                                                                    interpolation=interpolation)
+    
+
+    tiled_patches_images, tiled_patches_masks = produce_tile_patch_images_total(all_patches, all_patches_masks)
+                                                                                
+
+    tiled_patches_images_mixed, tiled_patches_masks_mixed = produce_tile_patch_images_mixed(all_patches, all_patches_masks, 
+                                                                                            patch_size=patch_size,
+                                                                                            target_num_images=target_num_images_mixed_tiling)
+    
+
+    total_images.extend(resize_crop_images)
+    total_masks.extend(resize_crop_masks) 
+
+    total_images.extend(patches_resized_images)
+    total_masks.extend(patches_resized_masks)
+
+    total_images.extend(tiled_patches_images)
+    total_masks.extend(tiled_patches_masks)
+
+    total_images.extend(tiled_patches_images_mixed)
+    total_masks.extend(tiled_patches_masks_mixed)
+
+    print()
+    print("FUNCTION EXTRACTION CLASS 4 SAMPLES")
+    print(f"The final size of the extracted images is {len(total_images)}")
+
+    return total_images, total_masks
+    
+
+
+
+
+
+
+

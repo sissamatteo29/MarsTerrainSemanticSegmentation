@@ -82,6 +82,57 @@ def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
 
 
 
+def plot_images_and_masks_variable_size(images, masks, figsize=(15, 22), cmap='gray'):
+
+    """
+    Helper function to plot images and masks pairs in the case of images of different sizes.
+    Because of the different sizes, the images and masks structures are expected to be python lists (which can 
+    contain variable datatypes).
+
+    Notice: when plotting grayscale or masks, it is necessary to specify vmin and vmax to the plotting function
+    so that no rescaling is performed on the input data by the library
+    
+    """
+    
+    if len(images) == 0:
+        return
+    
+    
+    # Define a colormap to simplify the visualisation of the classes on the masks
+    # Background (0) -> black
+    # Soil (1) -> red
+    # Bedrock (2) -> blue
+    # Sand (3) -> green
+    # Big Rock (4) -> yellow
+    mask_colormap = mpl.colors.ListedColormap(["black", "red", "blue", "green", "yellow"])
+
+    figure = plt.figure(figsize=figsize)
+
+    if len(images) == 1:    # Single image
+        axes_array = figure.subplots(1, 2)
+        axes_array = axes_array.flatten()
+        axes_array[0].imshow(images[0], cmap=cmap, vmin=0, vmax=255)
+        axes_array[0].axis('off')
+        # Plot original mask
+        axes_array[1].imshow(masks[0], cmap=mask_colormap, vmin=0, vmax=4) 
+        axes_array[1].axis('off')
+    else: 
+        image_count = len(images)
+        axes_array = figure.subplots(image_count, 2)
+        axes_array = axes_array.flatten()
+        for img_index, axes_index in zip(range(0, image_count), range(0, image_count * 2, 2)):
+            axes_array[axes_index].imshow(images[img_index], cmap=cmap, vmin=0, vmax=255)
+            axes_array[axes_index].axis('off')
+            # Plot original mask
+            axes_array[axes_index + 1].imshow(masks[img_index], cmap=mask_colormap, vmin=0, vmax=4) 
+            axes_array[axes_index + 1].axis('off')
+
+    plt.show()
+
+
+
+
+
 def plot_images_and_masks_augmented(aug_imgs, aug_msks, original_imgs, original_msks, grid=(10, 4), figsize=(20, 30), cmap='gray'):
 
     """
