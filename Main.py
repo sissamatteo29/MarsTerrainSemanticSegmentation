@@ -1,4 +1,5 @@
 # Import libraries
+from datetime import datetime
 import tensorflow as tf
 import keras
 
@@ -22,7 +23,8 @@ BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
 PATIENCE = 30
 EPOCHS = 1
-DATA_PATH = "data/ds_no_aliens.npz"
+DATA_PATH = "data/ds_no_aliens.npz" #"/kaggle/input/mars-data/ds_no_aliens.npz"
+CLASS4_PATH = "data/class4_samples.npz" #"/kaggle/input/mars-data/class4_samples.npz"
 
 # Set random seed for reproducibility
 keras.utils.set_random_seed(13)
@@ -33,7 +35,7 @@ train_images, train_masks, test_set = Preprocessing.load_data(
 )
 
 # Class 4 augmentation pipeline 
-class4_images, class4_masks, _ = Preprocessing.load_data("data/class4_augmented.npz")
+class4_images, class4_masks, _ = Preprocessing.load_data(CLASS4_PATH)
 class4_images, class4_masks = Preprocessing.extraction_class_4_samples(class4_images, class4_masks)
 
 # TODO: Instead of merging, build a dataset with the most representative samples of all classes until classes are balanced
@@ -133,4 +135,5 @@ metrics_to_plot = [
 Analysis.plot_training_results(history, training_metrics=metrics_to_plot)
 Analysis.plot_confusion_matrix(model, validation_dataset)
 
-Submission.prepare_submission(model_filename, test_set, "submission.csv")
+filename = f'submission_{datetime.now().strftime("%y%m%d_%H%M%S")}.csv'
+Submission.prepare_submission(model_filename, test_set, filename)

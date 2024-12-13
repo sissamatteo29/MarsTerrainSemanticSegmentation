@@ -106,9 +106,15 @@ def merge_datasets(orig_images, orig_masks, aug_images, aug_masks):
     """
     Merge two datasets into one
     """
+    print("FUNCTION MERGE DATASETS - Merging datasets")
+    print("--------------------------------------------")
     # Concat original and augmented images and masks
     all_images = np.concatenate((orig_images, aug_images))
     all_masks = np.concatenate((orig_masks, aug_masks))
+
+    print("Shape after merging")
+    print(f"Images: {all_images.shape}")
+    print(f"Masks: {all_masks.shape}")
 
     return all_images, all_masks
 

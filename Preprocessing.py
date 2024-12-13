@@ -87,7 +87,7 @@ def remove_background_images(images, masks, background_percentage):
     masks_clean = np.delete(masks, black_mask_indices, axis=0)
 
 
-    print("Shape of the images and masks after backgroun removal:")
+    print("Shape of the images and masks after background removal:")
     print(images_clean.shape, masks_clean.shape)
 
     print(f"Number of images removed: {len(black_mask_indices)}")
@@ -693,12 +693,24 @@ def extraction_class_4_samples(images, masks,
     print("FUNCTION EXTRACTION CLASS 4 SAMPLES")
     print(f"The final size of the extracted images is {len(total_images)}")
 
+    ## Cast back to numpy arrays
+    total_images = np.array(total_images)
+    total_masks = np.array(total_masks)
+
     return total_images, total_masks
     
 
 
-
-
-
-
-
+## Helper functions
+def pca_distribution(input_images):
+    # reshape x to apply PCA
+    x_flat = input_images.reshape(input_images.shape[0], -1)
+    # Reduce dimensions to 2 to plot data
+    pca = PCA(n_components=2)
+    features_pca = pca.fit_transform(x_flat)
+    # Plot Principal components
+    # plt.title('PCA of Image Data')
+    # plt.axis('equal')
+    # sns.scatterplot(x=features_pca[:, 0], y=features_pca[:, 1])
+    # plt.show()
+    return features_pca
