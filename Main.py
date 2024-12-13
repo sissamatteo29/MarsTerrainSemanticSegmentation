@@ -79,7 +79,7 @@ print("Model compiled!")
 metrics_logger = Logger.MetricsLoggerCallback()
 
 early_stopping = tf.keras.callbacks.EarlyStopping(
-    monitor='val_accuracy',
+    monitor='val_mean_iou',
     mode='max',
     patience=PATIENCE,
     restore_best_weights=True
