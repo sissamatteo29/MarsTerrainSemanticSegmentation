@@ -1,6 +1,12 @@
 
 
 import tensorflow as tf
+import keras
+import numpy as np
+
+
+# import sys
+# sys.path.append("/kaggle/input/")
 
 import Preprocessing
 import DatasetFlow
@@ -10,6 +16,9 @@ import Metrics
 import Logger
 import Analysis
 import Submission
+# import AugmentationHelper
+
+keras.utils.set_random_seed(13)
 
 NUM_CLASSES = 5
 
@@ -22,7 +31,7 @@ PATIENCE = 30
 EPOCHS = 1
 
 # Load data (already split into train set and test set)
-train_images, train_masks, test_set = Preprocessing.load_data("./Dataset_clean.npz")
+train_images, train_masks, test_set = Preprocessing.load_data("./ds_no_aliens.npz")
 
 # Split into train and validation, generating Dataset classes
 train_dataset, validation_dataset = Preprocessing.split_train_data(train_images, train_masks)
@@ -31,7 +40,8 @@ train_dataset, validation_dataset = Preprocessing.split_train_data(train_images,
 Preprocessing.compute_class_distribution(train_masks, 5)
 
 # Compute weights based on distribution of classes
-class_weights = Preprocessing.compute_class_weights(train_dataset)
+class_weights = Preprocessing.compute_class_weights(train_dataset, include_0=False, normalise=False)
+class_weights_normalised = Preprocessing.compute_class_weights(train_dataset, include_0=False, normalise=True)
 
 # Setup dataflow for the training and validation datasets (augmentation, shuffling, resizing, one_hot_encoding)
 train_dataset = DatasetFlow.data_flow(train_dataset, augment=False)
@@ -102,10 +112,19 @@ print(f'Final validation Mean Intersection Over Union: {final_val_meanIoU}%')
 model_filename = 'model.keras'
 model.save(model_filename)
 
-# Delete the model to free up resources
-del model
 
-Analysis.plot_training_results(history)
+metrics_to_plot = [
+    'loss',
+    'mean_iou',
+    'background_iou',
+    'class_1_iou',
+    'class_2_iou',
+    'class_3_iou',
+    'class_4_iou',
+]
+
+Analysis.plot_training_results(history, training_metrics=metrics_to_plot)
+Analysis.plot_confusion_matrix(model, validation_dataset)
 
 Submission.prepare_submission(model_filename, test_set, "submission.csv")
 
