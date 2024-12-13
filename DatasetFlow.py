@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
+import random
 import AugmentationHelper
+import Preprocessing
+import DatasetFlow
 
 NUM_CLASSES = 5
 BATCH_SIZE = 32
@@ -102,21 +105,104 @@ def data_flow(dataset, augment=True):
     return dataset
 
 
+
 def merge_datasets(orig_images, orig_masks, aug_images, aug_masks):
     """
     Merge two datasets into one
     """
     print("FUNCTION MERGE DATASETS - Merging datasets")
     print("--------------------------------------------")
+
+    print(f"Shape before merging: {orig_images.shape}")
     # Concat original and augmented images and masks
     all_images = np.concatenate((orig_images, aug_images))
     all_masks = np.concatenate((orig_masks, aug_masks))
 
-    print("Shape after merging")
-    print(f"Images: {all_images.shape}")
-    print(f"Masks: {all_masks.shape}")
+    # Suffle the dataset
+    indices = np.arange(all_images.shape[0])
+    np.random.shuffle(indices)
+    all_images = all_images[indices]
+    all_masks = all_masks[indices]
+
+    print(f"Shape after merging: {all_images.shape}")
 
     return all_images, all_masks
+
+
+def balance_dataset(orig_images, orig_masks):
+    """
+    Balance the dataset by adding samples from orig_images and orig_masks to class4_images and class4_masks
+    until the difference between class proportions is below a certain threshold (excluding class 0).
+    """
+    print("FUNCTION BALANCE DATASET - Balancing dataset")
+    print("--------------------------------------------")
+
+    # Separate the samples per classes
+    class_idx_dict = separate_samples_per_classes(orig_images, orig_masks)
+    
+    # Threshold for the difference between class proportions
+    threshold_strict = 1e-5 # 0.00001
+    threshold_broad = 1
+
+    # Initializations
+    merged_images = []
+    merged_masks = []
+    diff = {cls: threshold_strict for cls in range(1, NUM_CLASSES)}
+    completed_classes = set()  # Set to track classes with no samples left
+
+    while max(diff.values()) >= threshold_strict or len(merged_images) < 2000:  # to have at least 2000 samples
+            
+        # Find the class with the largest difference that has samples available
+        valid_classes = [cls for cls in diff if cls not in completed_classes and len(class_idx_dict[cls]) >= 0]
+        
+        if not valid_classes:  # If no valid classes are left to process, break
+            break
+
+        if len(valid_classes) < 4 and max(diff.values()) > threshold_broad:
+            # After class 4 samples are added, the difference starts to grow instead of decreasing, so we break the loop
+            break
+
+        
+        max_diff_class = max(valid_classes, key=diff.get)
+
+        # print(valid_classes)
+
+        # print(f"Adding samples from class {max_diff_class} to balance the dataset")
+
+        # Get and delete last sample from the class with the largest difference
+        sample_idx = class_idx_dict[max_diff_class].pop()
+
+        # Add the sample to the merged dataset
+        merged_images.append(orig_images[sample_idx])
+        merged_masks.append(orig_masks[sample_idx])
+
+        # Update the class distribution
+        proportions = Preprocessing.compute_class_distribution(merged_masks, NUM_CLASSES)
+        diff = calculate_proportion_diff(proportions)
+
+        # If this class has no more samples, mark it as completed
+        if len(class_idx_dict[max_diff_class]) == 0:
+            completed_classes.add(max_diff_class)
+
+        # print("Current difference:", diff)
+        # print("Current number of samples:", len(merged_images))
+        # print()
+        
+
+    # Cast the lists to numpy arrays
+    merged_images = np.array(merged_images)
+    merged_masks = np.array(merged_masks)
+
+    for key in class_idx_dict:
+        print(f"Class {key} has {len(class_idx_dict[key])} samples left, but couldn't be added so classes stay balanced.")
+    
+
+    print("Completed classes:", completed_classes)
+
+    print("Balancing complete.")
+    print(f"Shape of the balanced dataset: {merged_images.shape}")
+    
+    return merged_images, merged_masks
 
 
 ########################
@@ -150,3 +236,52 @@ def revert_flow_and_plot(train_dataset):
 
     # Plot with helper function
     AugmentationHelper.plot_images_and_masks(sample_images, sample_masks)
+
+
+
+# Helper functions
+def calculate_proportion_diff(proportions):
+    '''
+    Function to calculate the difference between proportions of each class (excluding class 0)
+    '''
+    total_samples = sum([count for class_id, count in proportions.items() if class_id != 0])
+    target_count = total_samples / (NUM_CLASSES - 1)
+    
+    # Calculate the difference from the target for each class (excluding class 0)
+    diff = {cls: (target_count - proportions[cls]) for cls in range(1, NUM_CLASSES)}
+    return diff
+
+
+
+
+
+
+def separate_samples_per_classes(orig_images, orig_masks):
+    """
+    Separate the samples per classes
+    """
+    class_idx_dict = {0:[],1:[],2:[],3:[],4:[]}
+
+    # Separate the original samples into classes
+    for sample_idx in range(orig_images.shape[0]):
+        # Get the mask
+        mask = orig_masks[sample_idx]
+        
+        # Get predominant class in sample
+        class_counts = np.bincount(mask.flatten(), minlength=5)
+        class_counts[0] = 0  # Ignore class 0
+        predominant_class = np.argmax(class_counts)
+
+        # Add the sample to the corresponding class
+        if predominant_class == 1:
+            class_idx_dict[1].append(sample_idx)
+        elif predominant_class == 2:
+            class_idx_dict[2].append(sample_idx)
+        elif predominant_class == 3:
+            class_idx_dict[3].append(sample_idx)
+        elif predominant_class == 4:
+            class_idx_dict[4].append(sample_idx)
+        else:
+            class_idx_dict[0].append(sample_idx)     
+
+    return class_idx_dict
