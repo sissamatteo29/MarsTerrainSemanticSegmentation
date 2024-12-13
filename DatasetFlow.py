@@ -102,6 +102,16 @@ def data_flow(dataset, augment=True):
     return dataset
 
 
+def merge_datasets(orig_images, orig_masks, aug_images, aug_masks):
+    """
+    Merge two datasets into one
+    """
+    # Concat original and augmented images and masks
+    all_images = np.concatenate((orig_images, aug_images))
+    all_masks = np.concatenate((orig_masks, aug_masks))
+
+    return all_images, all_masks
+
 
 ########################
 # DEBUGGING PURPOSES   #
