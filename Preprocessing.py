@@ -1,11 +1,13 @@
 import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.decomposition import PCA
 import tensorflow as tf
 import keras
 import sklearn
 import cv2
 
 
-def load_data(file_path, remove_bg_percentage=0):
+def load_data(file_path, remove_bg_percentage=0, remove_outliers=False):
     """
     Data loader function tailored for this specific dataset, it automatically unpacks the train and test sets
     and prints some statistics.
@@ -57,6 +59,9 @@ def load_data(file_path, remove_bg_percentage=0):
     if (remove_bg_percentage > 0):
         train_images, train_masks = remove_background_images(train_images, train_masks, remove_bg_percentage)
 
+    if remove_outliers:
+        train_images, train_masks = remove_outliers(train_images, train_masks)
+
     return train_images, train_masks, test_set
 
 
@@ -90,6 +95,37 @@ def remove_background_images(images, masks, background_percentage):
  
     return images_clean, masks_clean
 
+
+def remove_outliers(images, masks):
+    """
+    This function removes the images and masks that DBSCAN identifies as outliers.
+    """
+    print()
+    print("FUNCTION REMOVE OUTLIERS")
+    print("---------------------------------------------------")
+
+    # Apply DBSCAN
+    epsilon = 400  # Radius of the neighborhood
+    min_samples = 5  # Minimum points required to form a cluster
+    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
+    features_pca_clean = pca_distribution(images)
+    clusters = dbscan.fit_predict(features_pca_clean)
+
+    # Get indices of points outside of cluster 0
+    non_cluster_0_indices = np.where(clusters != 0)[0]
+
+    # keep only the clean samples from x and y
+    images_clean = np.delete(images, non_cluster_0_indices, axis=0)
+    masks_clean = np.delete(masks, non_cluster_0_indices, axis=0)
+
+
+    print("Shape of the images and masks after outlier removal:")
+    print(images_clean.shape, masks_clean.shape)
+
+    print(f"Number of images removed: {len(non_cluster_0_indices)}")
+    print()
+ 
+    return images_clean, masks_clean
 
 
 def split_train_data(train_images, train_masks, validation_ratio=0.1):
@@ -430,3 +466,19 @@ def tile_patch_to_target_size(image_patch, mask_patch, target_size=(64, 128)):
 
 
 
+## Helper function
+def pca_distribution(input_images):
+    # reshape x to apply PCA
+    x_flat = input_images.reshape(input_images.shape[0], -1)
+
+    # Reduce dimensions to 2 to plot data
+    pca = PCA(n_components=2)
+    features_pca = pca.fit_transform(x_flat)
+
+    # Plot Principal components
+    # plt.title('PCA of Image Data')
+    # plt.axis('equal')
+    # sns.scatterplot(x=features_pca[:, 0], y=features_pca[:, 1])
+    # plt.show()
+
+    return features_pca

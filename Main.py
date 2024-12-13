@@ -31,7 +31,7 @@ PATIENCE = 30
 EPOCHS = 1
 
 # Load data (already split into train set and test set)
-train_images, train_masks, test_set = Preprocessing.load_data("./ds_no_aliens.npz", remove_bg_percentage=0.95)
+train_images, train_masks, test_set = Preprocessing.load_data("./ds_no_aliens.npz", remove_bg_percentage=0.95, remove_outliers=False)
 
 # Split into train and validation, generating Dataset classes
 train_dataset, validation_dataset = Preprocessing.split_train_data(train_images, train_masks)
