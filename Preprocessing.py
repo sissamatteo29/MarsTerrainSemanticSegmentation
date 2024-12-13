@@ -60,7 +60,7 @@ def load_data(file_path, remove_bg_percentage=0, remove_outliers=False):
         train_images, train_masks = remove_background_images(train_images, train_masks, remove_bg_percentage)
 
     if remove_outliers:
-        train_images, train_masks = remove_outliers(train_images, train_masks)
+        train_images, train_masks = remove_outliers_function(train_images, train_masks)
 
     return train_images, train_masks, test_set
 
@@ -96,7 +96,7 @@ def remove_background_images(images, masks, background_percentage):
     return images_clean, masks_clean
 
 
-def remove_outliers(images, masks):
+def remove_outliers_function(images, masks):
     """
     This function removes the images and masks that DBSCAN identifies as outliers.
     """
@@ -237,7 +237,7 @@ def compute_class_weights_including_0(train_dataset):
     )
 
     # Set weight for class 0 to zero
-    class_weights[0] = 0
+    # class_weights[0] = 0
 
     
 

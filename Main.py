@@ -2,10 +2,11 @@
 from datetime import datetime
 import tensorflow as tf
 import keras
+import numpy as np
 
 # Kaggle configuration
 # import sys
-# sys.path.append("/kaggle/input/")
+# sys.path.append("/kaggle/input/aug-pipeline") # sys.path.append("/kaggle/input/")
 
 # Import custom modules
 import Preprocessing
@@ -16,6 +17,7 @@ import Metrics
 import Logger
 import Analysis
 import Submission
+import AugmentationHelper
 
 # Constants
 NUM_CLASSES = 5
@@ -23,8 +25,8 @@ BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
 PATIENCE = 30
 EPOCHS = 1
-DATA_PATH = "data/ds_no_aliens.npz" #"/kaggle/input/mars-data/ds_no_aliens.npz"
-CLASS4_PATH = "data/class4_samples.npz" #"/kaggle/input/mars-data/class4_samples.npz"
+DATA_PATH = "/kaggle/input/mars-data/ds_no_aliens.npz" #"data/ds_no_aliens.npz"
+CLASS4_PATH = "/kaggle/input/mars-data/class4_samples.npz" #"data/class4_samples.npz" 
 
 # Set random seed for reproducibility
 keras.utils.set_random_seed(13)
@@ -34,16 +36,26 @@ train_images, train_masks, test_set = Preprocessing.load_data(
     DATA_PATH, remove_bg_percentage=0.95, remove_outliers=False
 )
 
+
 # Class 4 augmentation pipeline 
 class4_images, class4_masks, _ = Preprocessing.load_data(CLASS4_PATH)
-class4_images, class4_masks = Preprocessing.extraction_class_4_samples(class4_images, class4_masks)
-
-# TODO: Instead of merging, build a dataset with the most representative samples of all classes until classes are balanced
+class4_images, class4_masks = Preprocessing.extraction_class_4_samples(class4_images, class4_masks, target_num_images_mixed_tiling=700)
+dataset_class4 = tf.data.Dataset.from_tensor_slices((class4_images, class4_masks))
+aug_class4 = dataset_class4.map(AugmentationHelper.map_geometric_transform_light, num_parallel_calls=tf.data.AUTOTUNE)
+dataset_class4.concatenate(aug_class4)
+class4_images, class4_masks = Analysis.dataset_to_array(dataset_class4)
 
 # Merge class 4 augmentation with the original training data 
 train_images, train_masks = DatasetFlow.merge_datasets(
     train_images, train_masks, class4_images, class4_masks
 )
+
+# Verify distribution of classes before balancing
+Preprocessing.compute_class_distribution(train_masks, NUM_CLASSES)
+
+# Build a dataset with the most representative samples of all classes until classes are balanced
+train_images, train_masks = DatasetFlow.balance_dataset(train_images, train_masks)
+
 
 # Split into train and validation, generating Dataset classes
 train_dataset, validation_dataset = Preprocessing.split_train_data(
@@ -51,7 +63,7 @@ train_dataset, validation_dataset = Preprocessing.split_train_data(
 )
 
 # Verify distribution of classes over the training dataset
-Preprocessing.compute_class_distribution(train_masks, 5)
+Preprocessing.compute_class_distribution(train_masks, NUM_CLASSES)
 
 # Compute weights based on distribution of classes
 class_weights = Preprocessing.compute_class_weights(
@@ -70,7 +82,7 @@ DatasetFlow.print_dataset_shape(train_dataset)
 DatasetFlow.print_dataset_shape(validation_dataset)
 
 # Build model
-model = Model.u_net()
+model = Model.dense_u_net()
 
 # Compile the model
 print("Compiling model...")
