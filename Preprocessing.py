@@ -5,7 +5,7 @@ import sklearn
 import cv2
 
 
-def load_data(file_path):
+def load_data(file_path, remove_bg_percentage=0):
     """
     Data loader function tailored for this specific dataset, it automatically unpacks the train and test sets
     and prints some statistics.
@@ -54,8 +54,41 @@ def load_data(file_path):
     print(f"Min pixel value: {test_set.min()}")
     print(f"Data type to encode pixel values: {test_set.dtype}")
 
+    if (remove_bg_percentage > 0):
+        train_images, train_masks = remove_background_images(train_images, train_masks, remove_bg_percentage)
+
     return train_images, train_masks, test_set
 
+
+
+def remove_background_images(images, masks, background_percentage):
+    """
+    This function removes the images and masks that have a `background_percentage`
+    of background class pixels.
+    """
+    print()
+    print("FUNCTION REMOVE BACKGROUND IMAGES")
+    print("---------------------------------------------------")
+
+    # Find all indices of masks with a high proportion of background pixels
+    black_mask_indices = []
+    for i, mask in enumerate(masks):
+        black_prop = np.sum(mask == 0) / mask.size # Proportion of black pixels
+        if black_prop >= background_percentage: # and (np.any(mask != 4)): # Exclude class 4 masks
+            black_mask_indices.append(i)
+            
+    # delete images and masks with high proportion of background pixels
+    images_clean = np.delete(images, black_mask_indices, axis=0)
+    masks_clean = np.delete(masks, black_mask_indices, axis=0)
+
+
+    print("Shape of the images and masks after backgroun removal:")
+    print(images_clean.shape, masks_clean.shape)
+
+    print(f"Number of images removed: {len(black_mask_indices)}")
+    print()
+ 
+    return images_clean, masks_clean
 
 
 
