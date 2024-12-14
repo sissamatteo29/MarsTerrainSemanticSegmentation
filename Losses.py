@@ -60,7 +60,7 @@ def dice_loss_exclude_0(y_true, y_pred, smooth=1e-6):
 
 
 
-def weighted_focal_loss_1(weights=None, gamma=2.0, alpha=0.5):
+def weighted_focal_loss(weights=None, gamma=2.0, alpha=0.5):
     """ 
     Wrapper for model.compile 
     Notice: the weights can be passed in as normalised or not, since the reduction is with the sum, if the weights are high, they will be internally
@@ -118,65 +118,6 @@ def weighted_focal_loss_1(weights=None, gamma=2.0, alpha=0.5):
     
         # Aggregate spatial dimensions (height and width)
         focal_loss_per_image = tf.reduce_sum(focal_loss, axis=[1, 2])  # Shape: [batch_size]
-    
-        # Aggregate across the batch
-        return alpha * tf.reduce_mean(focal_loss_per_image)  # Single scalar
-
-
-    return focal_loss
-
-
-
-
-
-def weighted_focal_loss_2(weights=None, gamma=2.0, alpha=1):
-    """ Wrapper for model.compile """
-
-    def focal_loss(y_true, y_pred):
-        """
-        Compute the Focal Loss, the reduction steps in this function are handled in this way:
-        - Average all focal coefficients over an image
-        - Average again over the batch
-        Since averaging is used in this version of the focal loss, there is no need to normalise the weights (as in weighted_focal_loss_1)
-        The coefficient alpha can be used to tune the loss manually, but by default is set to 1
-        
-        Args:
-        - y_true: Ground truth tensor, one-hot encoded. Shape: [batch_size, height, width, num_classes].
-        - y_pred: Predicted tensor (logits or probabilities). Shape: [batch_size, height, width, num_classes].
-        - weights: Balancing factor for classes (default 0.25).
-        - gamma: Focusing parameter (default 2.0).
-        - reduction: 'mean' or 'sum' to specify the aggregation method.
-    
-        Returns:
-        - Focal loss value.
-    
-        Notice: to exclude class 0 from the computation, simply set a weight of 0 when passing in weights
-        """
-    
-        # Clip predictions to avoid log(0) errors
-        y_pred = tf.clip_by_value(y_pred, 1e-6, 1.0)
-    
-        # Compute cross-entropy loss, Shape: [batch_size, height, width, num_classes]
-        ce_loss = -y_true * tf.math.log(y_pred)
-    
-        # Compute the focal weigths
-        p_t = tf.reduce_sum(y_true * y_pred, axis=-1)
-        focal_weight = tf.pow(1 - p_t, gamma)
-    
-        if weights is not None:
-            class_weights = tf.convert_to_tensor(weights, dtype=tf.float32)  # Ensure weights is a tensor
-            class_weights = tf.reshape(weights, [1, 1, 1, -1])  # Broadcast to match shape
-            class_weights = tf.cast(class_weights, tf.float32)
-            ce_loss = ce_loss * class_weights  # Apply class weights
-    
-        # Apply focal weight to the cross-entropy loss
-        focal_loss = focal_weight[..., tf.newaxis] * ce_loss  # Shape: [batch_size, height, width, num_classes]
-    
-        # Sum over classes dimension
-        focal_loss = tf.reduce_sum(focal_loss, axis=-1)  # Shape: [batch_size, height, width]
-    
-        # Aggregate spatial dimensions (height and width)
-        focal_loss_per_image = tf.reduce_mean(focal_loss, axis=[1, 2])  # Shape: [batch_size]
     
         # Aggregate across the batch
         return alpha * tf.reduce_mean(focal_loss_per_image)  # Single scalar
