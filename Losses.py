@@ -101,8 +101,12 @@ def weighted_focal_loss_1(weights=None, gamma=2.0, alpha=0.5):
         if weights is not None:
             class_weights = tf.convert_to_tensor(weights, dtype=tf.float32)  # Ensure weights is a tensor
             class_weights = tf.reshape(weights, [1, 1, 1, -1])  # Broadcast to match shape
-            if(tf.max(class_weights) > 5):
-                class_weights = class_weights / tf.reduce_sum(class_weights)  # Notice: scale the weights to prevent too high loss
+            # Notice: scale the weights to prevent too high loss
+            class_weights = tf.cond(
+                tf.reduce_max(class_weights) > 5,
+                lambda: class_weights / tf.reduce_sum(class_weights),  # If condition is True
+                lambda: class_weights  # If condition is False
+            )
             class_weights = tf.cast(class_weights, tf.float32)
             ce_loss = ce_loss * class_weights  # Apply class weights
     
