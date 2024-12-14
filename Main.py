@@ -24,7 +24,7 @@ NUM_CLASSES = 5
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
 PATIENCE = 30
-EPOCHS = 1
+EPOCHS = 1000
 DATA_PATH = "/kaggle/input/mars-data/ds_no_aliens.npz" #"data/ds_no_aliens.npz"
 CLASS4_PATH = "/kaggle/input/mars-data/class4_samples.npz" #"data/class4_samples.npz" 
 
@@ -37,13 +37,14 @@ train_images, train_masks, test_set = Preprocessing.load_data(
 )
 
 
-# Class 4 augmentation pipeline 
+# Class 4 augmentation pipeline version 2
 class4_images, class4_masks, _ = Preprocessing.load_data(CLASS4_PATH)
 class4_images, class4_masks = Preprocessing.extraction_class_4_samples(class4_images, class4_masks, target_num_images_mixed_tiling=700)
-dataset_class4 = tf.data.Dataset.from_tensor_slices((class4_images, class4_masks))
-aug_class4 = dataset_class4.map(AugmentationHelper.map_geometric_transform_light, num_parallel_calls=tf.data.AUTOTUNE)
-dataset_class4.concatenate(aug_class4)
-class4_images, class4_masks = Analysis.dataset_to_array(dataset_class4)
+# Class 4 augmentation pipeline version 3
+#dataset_class4 = tf.data.Dataset.from_tensor_slices((class4_images, class4_masks))
+#aug_class4 = dataset_class4.map(AugmentationHelper.map_geometric_transform_light, num_parallel_calls=tf.data.AUTOTUNE)
+#dataset_class4.concatenate(aug_class4)
+#class4_images, class4_masks = Analysis.dataset_to_array(dataset_class4)
 
 # Merge class 4 augmentation with the original training data 
 train_images, train_masks = DatasetFlow.merge_datasets(
@@ -53,8 +54,9 @@ train_images, train_masks = DatasetFlow.merge_datasets(
 # Verify distribution of classes before balancing
 Preprocessing.compute_class_distribution(train_masks, NUM_CLASSES)
 
-# Build a dataset with the most representative samples of all classes until classes are balanced
-train_images, train_masks = DatasetFlow.balance_dataset(train_images, train_masks)
+# Version 3
+# Build a dataset with the most representative samples of all classes until classes are balanced 
+#train_images, train_masks = DatasetFlow.balance_dataset(train_images, train_masks)
 
 
 # Split into train and validation, generating Dataset classes
@@ -88,7 +90,7 @@ model = Model.dense_u_net()
 print("Compiling model...")
 
 model.compile(
-    loss=Losses.weighted_categorical_crossentropy(class_weights),
+    loss=Losses.weighted_focal_loss(class_weights),
     optimizer=tf.keras.optimizers.AdamW(LEARNING_RATE),
     metrics=[
         Metrics.pixel_accuracy_exclude_class_0,
