@@ -34,7 +34,7 @@ def plot_image_and_mask(image, mask, figsize=(15, 22), cmap='gray'):
 
 
 
-def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
+def plot_images_and_masks(images, masks,titles=None, figsize=(15, 22), cmap='gray'):
 
     """
     Helper function to plot images and masks pairs.
@@ -62,9 +62,11 @@ def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
         axes_array = figure.subplots(1, 2)
         axes_array = axes_array.flatten()
         axes_array[0].imshow(images, cmap=cmap, vmin=0, vmax=255)
+        axes_array[0].set_title(titles[0]) if titles is not None else None
         axes_array[0].axis('off')
         # Plot original mask
         axes_array[1].imshow(masks, cmap=mask_colormap, vmin=0, vmax=4) 
+        axes_array[1].set_title(titles[0]) if titles is not None else None
         axes_array[1].axis('off')
     else: 
         image_count = len(images)
@@ -73,9 +75,11 @@ def plot_images_and_masks(images, masks, figsize=(15, 22), cmap='gray'):
         for img_index, axes_index in zip(range(0, image_count), range(0, image_count * 2, 2)):
             axes_array[axes_index].imshow(images[img_index], cmap=cmap, vmin=0, vmax=255)
             axes_array[axes_index].axis('off')
+            axes_array[axes_index].set_title(titles[img_index]) if titles is not None else None
             # Plot original mask
             axes_array[axes_index + 1].imshow(masks[img_index], cmap=mask_colormap, vmin=0, vmax=4) 
             axes_array[axes_index + 1].axis('off')
+            axes_array[axes_index + 1].set_title(titles[img_index]) if titles is not None else None
 
     plt.show()
 
