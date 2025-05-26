@@ -1,3 +1,8 @@
+
+# Semantic Segmentation Project
+
+This project aimed to semantically segment black and white images coming from a dataset containing Mars terrain pictures.
+
 # Segmentation Model Library
 
 To make the process of testing different models, parameters and techniques consistent among team members, the code base has been organised into python files (libraries) that served as the main source of code for all notebooks. In this way, all notebooks could execute the latest version of the code with all enhancements and improvements. All team mates contributed to the construction of this code base, tailored to the needs of this project.  
