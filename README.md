@@ -2,6 +2,7 @@
 # Semantic Segmentation Project
 
 This project aimed to semantically segment black and white images coming from a dataset containing Mars terrain pictures.
+The final report describes the results obtained by the team. In the folder `Code-Python` it is possible to find the custom libraries generated to support the development process (a more detailed description below), while in the `Notebooks` folder there are the Kaggle notebooks used to test and train the models.
 
 # Segmentation Model Library
 
